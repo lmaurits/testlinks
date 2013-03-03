@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
-import HTMLParser
 import requests
-from urllib import urlopen
-import urlparse
-from sys import argv, exit
+
+import getopt
+import HTMLParser
 import os.path
-from getopt import getopt
+import socket
+import sys
+import urllib
+import urlparse
 
 class LinkTester(HTMLParser.HTMLParser):
 
@@ -27,15 +29,19 @@ class LinkTester(HTMLParser.HTMLParser):
 
         # Test the linked to URL and print the appropriate output
         if tag == "a":
+            url = None
             for attribute, value in attrs:
                 if attribute == "href":
                     url = value
                     break
+            if not url:
+                return
             self.output_testing(url)
-            if self.test_link(url):
+            result, message = self.test_link(url)
+            if result:
                 self.output_okay()
             else:
-                self.output_broken(url)
+                self.output_broken(url, message)
 
     ### Substantial new methods
 
@@ -68,13 +74,13 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test a link to a "name"ed or id"ed" tag in this document."""
 
-        return True    # Not yet implemented, shouldn't be too hard
+        return True, "All good"    # Not yet implemented, shouldn't be too hard
 
     def test_mail_link(self, href):
     
         """Test a mailto: link"""    # No idea if this is possible
 
-        return True
+        return True, "All good"
 
     def test_relative_link(self, href):
 
@@ -92,10 +98,33 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test an absolute link."""
         if url.startswith("http://"):
-            response = requests.head(url)
-            return response.status_code == 200
+            try:
+                response = requests.head(url)
+                code = response.status_code
+                return code == 200, "HTTP Status %d" % code
+            except requests.exceptions.ConnectionError:
+                # Try to figure out what went wrong
+                # Maybe bad hostname?
+                try:
+                    urlparsed = urlparse.urlparse(url)
+                    if ":" in urlparsed.netloc:
+                        hostname, port = urlparsed.netloc.split(":")
+                        port = int(port)
+                    else:
+                        hostname = urlparsed.netloc
+                        port = None
+                    socket.getaddrinfo(hostname, port)
+                except socket.gaierror as e:
+                    if e.errno == -2:
+                        return False, "Bad hostname: %s" % hostname
+                return False, "Unknown networking error"
         else:
-            return os.path.exists(url)
+            exists = os.path.exists(url)
+            if exists:
+                message = "Local file exists"
+            else:
+                message = "Local file %s does not exist" % url
+            return exists, message
 
     ### Insubstantial new methods
 
@@ -113,14 +142,14 @@ class LinkTester(HTMLParser.HTMLParser):
         if self.verbose:
             print "OK!"
 
-    def output_broken(self,url):
+    def output_broken(self, url, message):
 
         """Notify the user a link tested as broken."""
         
         if self.verbose:
-            print "BROKEN! <==---"
+            print "BROKEN! %s" % message
         else:
-            print "%s:%d \"%s\" is broken!" % (self.target, self.lineno,url)
+            print "%s:%d \"%s\" is broken! (%s) " % (self.target, self.lineno, url, message)
 
 ### Fairly standard functions to facilitate command line use
 
@@ -139,20 +168,20 @@ def main():
     verbose = True
 
     try:
-        options, targets = getopt(argv[1:],"hs")
-    except GetoptError:
+        options, targets = getopt.getopt(sys.argv[1:],"hs")
+    except getopt.GetoptError:
         print "Unrecognised option!"
         usage()
-        exit(2)
+        sys.exit(2)
     if not targets:
         usage()
-        exit(2)
+        sys.exit(2)
     for (o,a) in options:
         if o=="-s":
             verbose=False
         if o=="-h":
             usage()
-            exit(0)
+            sys.exit(0)
 
     tester = LinkTester()
     tester.verbose = verbose
@@ -160,7 +189,7 @@ def main():
     for target in targets:
         # Make sure target is accessible
         try:
-            fp = urlopen(target)
+            fp = urllib.urlopen(target)
         except IOError:
             print "Could not open page %s!" % target
             continue 
@@ -183,7 +212,7 @@ def main():
         finally:
             fp.close()
 
-    exit(0)
+    sys.exit(0)
 
 if __name__=="__main__":
     main()
