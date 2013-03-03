@@ -5,7 +5,7 @@ import requests
 from urllib import urlopen
 import urlparse
 from sys import argv, exit
-from os.path import basename, dirname, exists
+import os.path
 from getopt import getopt
 
 class LinkTester(HTMLParser.HTMLParser):
@@ -84,15 +84,22 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test a relative link (i.e. to a file in this directory)."""
 
-        if self.seed.startswith("http://"):
+        if self.seed_type == "http":
             url = self.urlparsed.scheme + "://" + self.urlparsed.netloc + href
+        elif self.seed_type == "local":
+            if href.startswith("/"):
+                href = href[1:]
+            url = os.path.join(self.dirname, href)
         return self.test_absolute_link(url)
 
     def test_absolute_link(self, url):
 
         """Test an absolute link."""
-        response = requests.head(url)
-        return response.status_code == 200
+        if url.startswith("http://"):
+            response = requests.head(url)
+            return response.status_code == 200
+        else:
+            return os.path.exists(url)
 
     ### Insubstantial new methods
 
@@ -159,14 +166,16 @@ def main():
     for filename in files:
         tester.seed = filename
         if filename.startswith("http://"):
+            tester.seed_type = "http"
             tester.urlparsed = urlparse.urlparse(filename)
+        else:
+            tester.seed_type = "local"
+            tester.dirname = os.path.dirname(filename)
         try:
             fp=urlopen(filename)
         except IOError:
             print "Could not open page %s!" % filename
             continue 
-        tester.dirname=dirname(filename)
-        tester.filename=basename(filename)
         try:
             for line_number, line in enumerate(fp):
                 tester.feed(line_number+1,line)
