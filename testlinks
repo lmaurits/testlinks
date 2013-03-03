@@ -88,7 +88,7 @@ class LinkTester(HTMLParser.HTMLParser):
 
     def test_relative_link(self, href):
 
-        """Test a relative link (i.e. to a file in this directory)."""
+        """Test a relative link."""
 
         if self.target_type == "http":
             url = self.urlparsed.scheme + "://" + self.urlparsed.netloc + href
@@ -101,8 +101,13 @@ class LinkTester(HTMLParser.HTMLParser):
     def test_absolute_link(self, url):
 
         """Test an absolute link."""
+        # Get rid of fragments (requires a bit of a dance!)
+        urlparsed = urlparse.urlparse(url)
+        urlparsed = list(urlparsed)
+        urlparsed[5] = ""
+        url = urlparse.urlunparse(urlparsed)
+        urlparsed = urlparse.urlparse(url)
         if url.startswith("http://") or url.startswith("https://"):
-            urlparsed = urlparse.urlparse(url)
             self.rp.set_url(urlparsed.scheme + "://" + urlparsed.netloc + "/robots.txt")
             if not self.rp.can_fetch(url, USER_AGENT):
                 return True, "Skipped testing to abide by robots.txt."
