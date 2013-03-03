@@ -14,6 +14,12 @@ import urlparse
 
 USER_AGENT = "TestLinks"
 
+def _looks_like_url(target):
+    for clue in ("www", ".com", ".org", ".net", ".edu", ".html"):
+        if clue in target:
+            return True
+    return False
+
 class LinkTester(HTMLParser.HTMLParser):
 
     ### Overridden methods
@@ -231,6 +237,10 @@ def main():
             sys.exit(0)
 
     for target in targets:
+        # Be gentle and add http:// to targets which were probably supposed to have it
+        if not os.path.exists(target) and _looks_like_url(target):
+            target = "http://" + target
+
         # Make sure target is accessible
         try:
             fp = urllib.urlopen(target)
