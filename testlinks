@@ -12,14 +12,10 @@ class LinkTester(HTMLParser.HTMLParser):
 
     ### Overridden methods
 
-    def __init__(self,verbose=False):
-
+    def __init__(self):
         HTMLParser.HTMLParser.__init__(self)
-        self.verbose=verbose
+        self.verbose=True
         self.cache={}
-        self.dirname=""
-        self.filename=""
-        self.lineno=0
 
     def feed(self,lineno,line):
 
@@ -84,9 +80,9 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test a relative link (i.e. to a file in this directory)."""
 
-        if self.seed_type == "http":
+        if self.target_type == "http":
             url = self.urlparsed.scheme + "://" + self.urlparsed.netloc + href
-        elif self.seed_type == "local":
+        elif self.target_type == "local":
             if href.startswith("/"):
                 href = href[1:]
             url = os.path.join(self.dirname, href)
@@ -108,8 +104,7 @@ class LinkTester(HTMLParser.HTMLParser):
         """Notify the user we are testing a link."""
 
         if self.verbose:
-            print "%s:%d Testing \"%s\"..." % (self.filename,
-                self.lineno, url),
+            print "%s:%d Testing \"%s\"..." % (self.target, self.lineno, url),
 
     def output_okay(self):
 
@@ -125,8 +120,7 @@ class LinkTester(HTMLParser.HTMLParser):
         if self.verbose:
             print "BROKEN! <==---"
         else:
-            print "%s:%d \"%s\" is broken!" % (self.filename,
-                self.lineno,url)
+            print "%s:%d \"%s\" is broken!" % (self.target, self.lineno,url)
 
 ### Fairly standard functions to facilitate command line use
 
@@ -145,16 +139,14 @@ def main():
     verbose = True
 
     try:
-        options, files = getopt(argv[1:],"hs")
+        options, targets = getopt(argv[1:],"hs")
     except GetoptError:
         print "Unrecognised option!"
         usage()
         exit(2)
-
-    if not files:
+    if not targets:
         usage()
         exit(2)
-    
     for (o,a) in options:
         if o=="-s":
             verbose=False
@@ -162,26 +154,35 @@ def main():
             usage()
             exit(0)
 
-    tester = LinkTester(verbose)
-    for filename in files:
-        tester.seed = filename
-        if filename.startswith("http://"):
-            tester.seed_type = "http"
-            tester.urlparsed = urlparse.urlparse(filename)
-        else:
-            tester.seed_type = "local"
-            tester.dirname = os.path.dirname(filename)
+    tester = LinkTester()
+    tester.verbose = verbose
+
+    for target in targets:
+        # Make sure target is accessible
         try:
-            fp=urlopen(filename)
+            fp = urlopen(target)
         except IOError:
-            print "Could not open page %s!" % filename
+            print "Could not open page %s!" % target
             continue 
+
+        # Set Tester attributes
+        tester.target = target
+        if target.startswith("http://"):
+            tester.target_type = "http"
+            tester.urlparsed = urlparse.urlparse(target)
+        else:
+            tester.target_type = "local"
+            tester.dirname = os.path.dirname(target)
+
+        # Test target
         try:
             for line_number, line in enumerate(fp):
                 tester.feed(line_number+1,line)
         except HTMLParser.HTMLParseError:
             print "Error parsing page %s: is this an (X)HTML document?"
-        fp.close()
+        finally:
+            fp.close()
+
     exit(0)
 
 if __name__=="__main__":
