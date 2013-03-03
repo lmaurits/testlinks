@@ -66,6 +66,10 @@ class LinkTester(HTMLParser.HTMLParser):
             result = self.test_internal_link(link)
         elif link.startswith("mailto"):
             result = self.test_mail_link(link)
+        elif link.startswith("ftp://"):
+            result = self.test_ftp_link(link)
+        elif link.startswith("gopher://"):
+            result = self.test_gopher_link(link)
         else:
             result = self.test_absolute_link(link)
 
@@ -78,13 +82,25 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test a link to a "name"ed or id"ed" tag in this document."""
 
-        return True, "All good"    # Not yet implemented, shouldn't be too hard
+        return True, "Not implemented yet"  # Not yet implemented, shouldn't be too hard
 
     def test_mail_link(self, href):
     
-        """Test a mailto: link"""    # No idea if this is possible
+        """Test a mailto: link"""
 
-        return True, "All good"
+        return True, "Not implemented yet"  # No idea if this is possible
+
+    def test_ftp_link(self, href):
+    
+        """Test an FTP link"""
+
+        return True, "Not implemented yet"  # Not yet implemented, shouldn't be too hard
+
+    def test_gopher_link(self, href):
+    
+        """Test a Gopher link"""
+
+        return True, "Not implemented yet"  # Not yet implemented, shouldn't be too hard
 
     def test_relative_link(self, href):
 
