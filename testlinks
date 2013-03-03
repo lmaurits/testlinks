@@ -97,7 +97,7 @@ class LinkTester(HTMLParser.HTMLParser):
     def test_absolute_link(self, url):
 
         """Test an absolute link."""
-        if url.startswith("http://"):
+        if url.startswith("http://") or url.startswith("https://"):
             try:
                 response = requests.head(url)
                 code = response.status_code
