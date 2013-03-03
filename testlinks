@@ -20,6 +20,13 @@ def _looks_like_url(target):
             return True
     return False
 
+def _guess_root_directory(target):
+    for clue in ("htdocs/", "public_html/"):
+        if clue in target:
+            return target[0:target.find(clue)+len(clue)]
+    else:
+            os.path.dirname(target)
+
 class LinkTester(HTMLParser.HTMLParser):
 
     ### Overridden methods
@@ -255,7 +262,7 @@ def main():
             tester.urlparsed = urlparse.urlparse(target)
         else:
             tester.target_type = "local"
-            tester.dirname = os.path.dirname(target)
+            tester.dirname = _guess_root_directory(target)
 
         # Test target
         try:
