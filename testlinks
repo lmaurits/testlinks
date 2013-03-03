@@ -1,223 +1,175 @@
 #!/usr/bin/env python
-# TestLinks 0.1
-#
-# Copyright (c) 2007, Luke Maurits <luke@maurits.id.au>
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# * Redistributions of source code must retain the above copyright notice,
-# this list of conditions and the following disclaimer.
-# * Redistributions in binary form must reproduce the above copyright notice,
-# this list of conditions and the following disclaimer in the documentation
-# and/or other materials provided with the distribution.
-# * The name of Luke Maurits may not be used to endorse or promote products
-# derived from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
 
-from htmllib import HTMLParser
+import HTMLParser
 from formatter import NullFormatter
 from urllib import urlopen
 from sys import argv, exit
 from os.path import basename, dirname, exists
 from getopt import getopt
 
-class LinkTester(HTMLParser):
+class LinkTester(HTMLParser.HTMLParser):
 
-	### Overridden methods
+    ### Overridden methods
 
-	def __init__(self,verbose=False):
+    def __init__(self,verbose=False):
 
-		HTMLParser.__init__(self,NullFormatter())
-		self.verbose=verbose
-		self.cache={}
-		self.dirname=""
-		self.filename=""
-		self.lineno=0
+        HTMLParser.HTMLParser.__init__(self)
+        self.verbose=verbose
+        self.cache={}
+        self.dirname=""
+        self.filename=""
+        self.lineno=0
 
-	def feed(self,lineno,line):
+    def feed(self,lineno,line):
 
-		# Keep track of the line number to enable better output
-		self.lineno=lineno
-		HTMLParser.feed(self,line)
+        # Keep track of the line number to enable better output
+        self.lineno=lineno
+        HTMLParser.HTMLParser.feed(self,line)
 
-	def report_unbalanced(self, tag):
+    def handle_starttag(self, tag, attrs):
 
-		# Don't say anything about unbalanced tags, it's not our job!
-		pass
+        # Test the linked to URL and print the appropriate output
+        if tag == "a":
+            for attribute, value in attrs:
+                if attribute == "href":
+                    self.output_testing(value)
+                    if self.test_link(value):
+                        self.output_okay()
+                    else:
+                        self.output_broken(value)
 
-	def anchor_bgn(self, url, name, type):
+    ### Substantial new methods
 
-		# Test the linked to URL and print the appropriate output
-		self.output_testing(url)
-		if self.test_link(url):
-			self.output_okay()
-		else:
-			self.output_broken(url)
+    def test_link(self,link):
 
-	### Substantial new methods
+        """Return True if link is okay, False if link is broken."""
 
-	def test_link(self,link):
+        # Have we already checked this link?
 
-		"""Return True if link is okay, False if link is broken."""
+        if link in self.cache:
+            return self.cache[link]
+        else:
+            # Determine what kind of link we're dealing with
+            # and dispatch the testing accordingly.
 
-		# Have we already checked this link?
+            if link.startswith("#"):
+                result = self.test_internal_link(link)
+            elif link.startswith("mailto"):
+                result = self.test_mail_link(link)
+            elif "://" in link:
+                result = self.test_absolute_link(link)
+            else:
+                result = self.test_relative_link(link)
 
-		if link in self.cache:
-			return self.cache[link]
-		else:
-			# Determine what kind of link we're dealing with
-			# and dispatch the testing accordingly.
+            # Cache the result incase this link comes up again
+            self.cache[link]=result
 
-			if link.startswith("#"):
-				result = self.test_internal_link(link)
-			elif link.startswith("mailto"):
-				result = self.test_mail_link(link)
-			elif "://" in link:
-				result = self.test_absolute_link(link)
-			else:
-				result = self.test_relative_link(link)
+            return result
+    
+    def test_internal_link(self, href):
 
-			# Cache the result incase this link comes up again
-			self.cache[link]=result
+        """Test a link to a "name"ed or id"ed" tag in this document."""
 
-			return result
-	
-	def test_internal_link(self, href):
+        return True    # Not yet implemented, shouldn't be too hard
 
-		"""Test a link to a "name"ed or id"ed" tag in this document."""
+    def test_mail_link(self, href):
+    
+        """Test a mailto: link"""    # No idea if this is possible
 
-		return True	# Not yet implemented, shouldn't be too hard
+        return True
 
-	def test_mail_link(self, href):
-	
-		"""Test a mailto: link"""	# No idea if this is possible
+    def test_relative_link(self, href):
 
-		return True
+        """Test a relative link (i.e. to a file in this directory)."""
 
-	def test_relative_link(self, href):
+        return self.test_absolute_link(self.dirname+"/"+href)
 
-		"""Test a relative link (i.e. to a file in this directory)."""
+    def test_absolute_link(self, href):
 
-		return self.test_absolute_link(self.dirname+"/"+href)
+        """Test an absolute link (e.g. http, ftp) with urlopen."""
+        try:
+            urlopen(href)
+            return True
+        except IOError:
+            return False
 
-	def test_absolute_link(self, href):
+    ### Insubstantial new methods
 
-		"""Test an absolute link (e.g. http, ftp) with urlopen."""
-		try:
-			urlopen(href)
-			return True
-		except IOError:
-			return False
+    def output_testing(self,url):
 
-	### Insubstantial new methods
+        """Notify the user we are testing a link."""
 
-	def output_testing(self,url):
+        if self.verbose:
+            print "%s:%d Testing \"%s\"..." % (self.filename,
+                self.lineno, url),
 
-		"""Notify the user we are testing a link."""
+    def output_okay(self):
 
-		if self.verbose:
-			print "%s:%d Testing \"%s\"..." % (self.filename,
-				self.lineno, url),
+        """Notify the user a link tested okay."""
 
-	def output_okay(self):
+        if self.verbose:
+            print "OK!"
 
-		"""Notify the user a link tested okay."""
+    def output_broken(self,url):
 
-		if self.verbose:
-			print "OK!"
-
-	def output_broken(self,url):
-
-		"""Notify the user a link tested as broken."""
-		
-		if self.verbose:
-			print "BROKEN! <==---"
-		else:
-			print "%s:%d \"%s\" is broken!" % (self.filename,
-				self.lineno,url)
+        """Notify the user a link tested as broken."""
+        
+        if self.verbose:
+            print "BROKEN! <==---"
+        else:
+            print "%s:%d \"%s\" is broken!" % (self.filename,
+                self.lineno,url)
 
 ### Fairly standard functions to facilitate command line use
 
 def usage():
 
-	print "TestLinks 0.1"
-	print "Copyright Luke Maurits, 2007"
-	print "See http://www.luke.maurits/software/testlinks/ for latest version"
-	print ""
-	print "usage: testlinks [-s] [-h] file1 file2 file3..."
-	print "-h prints this usage message."
-	print "-s specifies 'silent mode': no output if no broken links are found."
+    print "TestLinks 0.1"
+    print "Copyright Luke Maurits, 2007"
+    print "See http://www.luke.maurits/software/testlinks/ for latest version"
+    print ""
+    print "usage: testlinks [-s] [-h] file1 file2 file3..."
+    print "-h prints this usage message."
+    print "-s specifies 'silent mode': no output if no broken links are found."
 
 def main():
 
-	# Be noisy by default
-	verbose = True
+    verbose = True
 
-	# Parse options
-	try:
-		options, files = getopt(argv[1:],"hs")
-	except GetoptError:
-		print "Unrecognised option!  Run 'testlinks -h' to see usage guide."
+    try:
+        options, files = getopt(argv[1:],"hs")
+    except GetoptError:
+        print "Unrecognised option!"
+        usage()
+        exit(2)
 
-	if files==[]:
-		# We can't do anything if no files are specified!
-		usage()
-		exit(0)
-	
-	for (o,a) in options:
-		if o=="-s":
-			# Enable silent mode
-			verbose=False
-		if o=="-h":
-			# Show usage guide and quit
-			usage()
-			exit(0)
+    if not files:
+        usage()
+        exit(2)
+    
+    for (o,a) in options:
+        if o=="-s":
+            verbose=False
+        if o=="-h":
+            usage()
+            exit(0)
 
-	# Create the tester
-	tester = LinkTester(verbose)
-
-	# Feed each argument to the tester, line by line
-	for filename in files:
-
-		# Open file
-		try:
-			fp=urlopen(filename)
-		except IOError:
-			print "Could not open page %s!" % filename
-			continue 
-
-		# Set some tester attribtues, initalise line counter
-		tester.dirname=dirname(filename)
-		tester.filename=basename(filename)
-		lineno=1
-
-		# Prase the file line by line
-		try:
-			for line in fp:
-				tester.feed(lineno,line)
-				lineno+=1
-		except HTMLParseError:
-			print "Error parsing page %s: is this an (X)HTML document?"
-
-		# Close the file no matter what's happened!
-		fp.close()
-
-	# Done
-	exit(0)
+    tester = LinkTester(verbose)
+    for filename in files:
+        try:
+            fp=urlopen(filename)
+        except IOError:
+            print "Could not open page %s!" % filename
+            continue 
+        tester.dirname=dirname(filename)
+        tester.filename=basename(filename)
+        try:
+            for line_number, line in enumerate(fp):
+                tester.feed(line_number+1,line)
+        except HTMLParser.HTMLParseError:
+            print "Error parsing page %s: is this an (X)HTML document?"
+        fp.close()
+    exit(0)
 
 if __name__=="__main__":
-
-	main()
+    main()
