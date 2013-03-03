@@ -102,7 +102,7 @@ class LinkTester(HTMLParser.HTMLParser):
                 response = requests.head(url)
                 code = response.status_code
                 return code == 200, "HTTP Status %d" % code
-            except requests.exceptions.ConnectionError:
+            except requests.exceptions.ConnectionError as e:
                 # Try to figure out what went wrong
                 # Maybe bad hostname?
                 try:
@@ -114,10 +114,14 @@ class LinkTester(HTMLParser.HTMLParser):
                         hostname = urlparsed.netloc
                         port = None
                     socket.getaddrinfo(hostname, port)
-                except socket.gaierror as e:
-                    if e.errno == -2:
+                except socket.gaierror as e2:
+                    if e2.errno == -2:
                         return False, "Bad hostname: %s" % hostname
                 return False, "Unknown networking error"
+            except ValueError as e:
+                if "No schema supplied" in e.message:
+                    return False, "No schema (missing http://?)"
+                return False, e.message
         else:
             exists = os.path.exists(url)
             if exists:
