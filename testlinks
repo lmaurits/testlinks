@@ -207,7 +207,7 @@ def main():
 
         # Set Tester attributes
         tester.target = target
-        if target.startswith("http://"):
+        if target.startswith("http://") or target.startswith("https://"):
             tester.target_type = "http"
             tester.urlparsed = urlparse.urlparse(target)
         else:
