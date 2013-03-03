@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import HTMLParser
-from formatter import NullFormatter
+import requests
 from urllib import urlopen
+import urlparse
 from sys import argv, exit
 from os.path import basename, dirname, exists
 from getopt import getopt
@@ -32,11 +33,13 @@ class LinkTester(HTMLParser.HTMLParser):
         if tag == "a":
             for attribute, value in attrs:
                 if attribute == "href":
-                    self.output_testing(value)
-                    if self.test_link(value):
-                        self.output_okay()
-                    else:
-                        self.output_broken(value)
+                    url = value
+                    break
+            self.output_testing(url)
+            if self.test_link(url):
+                self.output_okay()
+            else:
+                self.output_broken(url)
 
     ### Substantial new methods
 
@@ -45,26 +48,25 @@ class LinkTester(HTMLParser.HTMLParser):
         """Return True if link is okay, False if link is broken."""
 
         # Have we already checked this link?
-
         if link in self.cache:
             return self.cache[link]
+
+        # Determine what kind of link we're dealing with
+        # and dispatch the testing accordingly.
+
+        if link.startswith("/"):
+            result = self.test_relative_link(link)
+        elif link.startswith("#"):
+            result = self.test_internal_link(link)
+        elif link.startswith("mailto"):
+            result = self.test_mail_link(link)
         else:
-            # Determine what kind of link we're dealing with
-            # and dispatch the testing accordingly.
+            result = self.test_absolute_link(link)
 
-            if link.startswith("#"):
-                result = self.test_internal_link(link)
-            elif link.startswith("mailto"):
-                result = self.test_mail_link(link)
-            elif "://" in link:
-                result = self.test_absolute_link(link)
-            else:
-                result = self.test_relative_link(link)
+        # Cache the result incase this link comes up again
+        self.cache[link]=result
 
-            # Cache the result incase this link comes up again
-            self.cache[link]=result
-
-            return result
+        return result
     
     def test_internal_link(self, href):
 
@@ -82,16 +84,15 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test a relative link (i.e. to a file in this directory)."""
 
-        return self.test_absolute_link(self.dirname+"/"+href)
+        if self.seed.startswith("http://"):
+            url = self.urlparsed.scheme + "://" + self.urlparsed.netloc + href
+        return self.test_absolute_link(url)
 
-    def test_absolute_link(self, href):
+    def test_absolute_link(self, url):
 
-        """Test an absolute link (e.g. http, ftp) with urlopen."""
-        try:
-            urlopen(href)
-            return True
-        except IOError:
-            return False
+        """Test an absolute link."""
+        response = requests.head(url)
+        return response.status_code == 200
 
     ### Insubstantial new methods
 
@@ -156,6 +157,9 @@ def main():
 
     tester = LinkTester(verbose)
     for filename in files:
+        tester.seed = filename
+        if filename.startswith("http://"):
+            tester.urlparsed = urlparse.urlparse(filename)
         try:
             fp=urlopen(filename)
         except IOError:
