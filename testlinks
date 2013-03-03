@@ -5,10 +5,13 @@ import requests
 import getopt
 import HTMLParser
 import os.path
+import robotparser
 import socket
 import sys
 import urllib
 import urlparse
+
+USER_AGENT = "TestLinks"
 
 class LinkTester(HTMLParser.HTMLParser):
 
@@ -18,6 +21,7 @@ class LinkTester(HTMLParser.HTMLParser):
         HTMLParser.HTMLParser.__init__(self)
         self.verbose=True
         self.cache={}
+        self.rp = robotparser.RobotFileParser()
 
     def feed(self,lineno,line):
 
@@ -98,15 +102,18 @@ class LinkTester(HTMLParser.HTMLParser):
 
         """Test an absolute link."""
         if url.startswith("http://") or url.startswith("https://"):
+            urlparsed = urlparse.urlparse(url)
+            self.rp.set_url(urlparsed.scheme + "://" + urlparsed.netloc + "/robots.txt")
+            if not self.rp.can_fetch(url, USER_AGENT):
+                return True, "Skipped testing to abide by robots.txt."
             try:
-                response = requests.head(url)
+                response = requests.head(url, headers={"User-Agent" : USER_AGENT})
                 code = response.status_code
                 return code == 200, "HTTP Status %d" % code
             except requests.exceptions.ConnectionError as e:
                 # Try to figure out what went wrong
                 # Maybe bad hostname?
                 try:
-                    urlparsed = urlparse.urlparse(url)
                     if ":" in urlparsed.netloc:
                         hostname, port = urlparsed.netloc.split(":")
                         port = int(port)
