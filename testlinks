@@ -68,7 +68,7 @@ class LinkTester(HTMLParser.HTMLParser):
         # Determine what kind of link we're dealing with
         # and dispatch the testing accordingly.
 
-        if link.startswith("/"):
+        if link.startswith("/") or link.startswith("./") or link.startswith("../"):
             result = self.test_relative_link(link)
         elif link.startswith("#"):
             result = self.test_internal_link(link)
