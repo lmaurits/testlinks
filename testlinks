@@ -8,6 +8,7 @@ import os.path
 import robotparser
 import socket
 import sys
+import time
 import urllib
 import urlparse
 
@@ -20,6 +21,7 @@ class LinkTester(HTMLParser.HTMLParser):
     def __init__(self):
         HTMLParser.HTMLParser.__init__(self)
         self.verbose=True
+        self.host_times={}
         self.cache={}
         self.rp = robotparser.RobotFileParser()
 
@@ -128,6 +130,11 @@ class LinkTester(HTMLParser.HTMLParser):
             if not self.rp.can_fetch(url, USER_AGENT):
                 return True, "Skipped testing to abide by robots.txt."
             try:
+                last_checked = self.host_times.get(urlparsed.netloc, 0)
+                now = time.time()
+                if now - last_checked < 5.0:
+                    time.sleep((last_checked + 5 - now))
+                self.host_times[urlparsed.netloc] = now
                 response = requests.head(url, headers={"User-Agent" : USER_AGENT})
                 code = response.status_code
                 if self.strict:
