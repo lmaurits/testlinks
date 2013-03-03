@@ -114,7 +114,10 @@ class LinkTester(HTMLParser.HTMLParser):
             try:
                 response = requests.head(url, headers={"User-Agent" : USER_AGENT})
                 code = response.status_code
-                return code == 200, "HTTP Status %d" % code
+                if self.strict:
+                    return code == 200, "HTTP Status %d" % code
+                else:
+                    return code != 404, "HTTP Status %d" % code
             except requests.exceptions.ConnectionError as e:
                 # Try to figure out what went wrong
                 # Maybe bad hostname?
@@ -175,16 +178,19 @@ def usage():
     print "Copyright Luke Maurits, 2007"
     print "See http://www.luke.maurits/software/testlinks/ for latest version"
     print ""
-    print "usage: testlinks [-s] [-h] file1 file2 file3..."
+    print "usage: testlinks [-s] [-v] [-h] file1 file2 file3..."
     print "-h prints this usage message."
-    print "-s specifies 'silent mode': no output if no broken links are found."
+    print "-s specified 'scrict mode': treat anything other than HTTP 200 as broken."
+    print "-v specifies 'verbose mode': report results of every link check."
 
 def main():
 
-    verbose = True
+    tester = LinkTester()
+    tester.verbose = False
+    tester.strict = False
 
     try:
-        options, targets = getopt.getopt(sys.argv[1:],"hs")
+        options, targets = getopt.getopt(sys.argv[1:],"hsv")
     except getopt.GetoptError:
         print "Unrecognised option!"
         usage()
@@ -194,13 +200,12 @@ def main():
         sys.exit(2)
     for (o,a) in options:
         if o=="-s":
-            verbose=False
+            tester.strict = True
+        if o=="-v":
+            tester.verbose = True
         if o=="-h":
             usage()
             sys.exit(0)
-
-    tester = LinkTester()
-    tester.verbose = verbose
 
     for target in targets:
         # Make sure target is accessible
